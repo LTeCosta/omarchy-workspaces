@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.ltecosta.workspaces",
+  "name": "Workspaces",
+  "version": "1.0.0",
+  "author": "Lucas Costa",
+  "license": "MIT",
+  "description": "Omarchy's workspace indicators, showing how many windows a full-size window hides and trimming a secondary laptop panel to one workspace.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Workspaces.qml"
+  },
+  "barWidget": {
+    "displayName": "Workspaces",
+    "description": "Workspace number indicators with a count of the windows a full-size window hides.",
+    "category": "Compositor",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.workspaces"
+  }
+}
