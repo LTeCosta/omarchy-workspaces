@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Validate this plugin and run its tests.
+set -uo pipefail
+
+dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+failed=0
+
+fail() {
+  echo "FAIL $*" >&2
+  failed=1
+}
+
+# Every Lua interpreter at version 5.4 or later, one per version, for plugins
+# that ship Lua code: the oldest supported runtime and the one Hyprland embeds.
+lua_bins=()
+lua_versions=" "
+for candidate in lua5.4 lua5.5 lua; do
+  command -v "$candidate" >/dev/null || continue
+  version=$("$candidate" -e 'local v = _VERSION:match("%d+%.%d+") if v and tonumber(v) >= 5.4 then io.write(v) end' 2>/dev/null)
+  [[ -n $version && $lua_versions != *" $version "* ]] || continue
+  lua_bins+=("$candidate")
+  lua_versions+="$version "
+done
+
+# qmllint parses every QML file; it exits non-zero on syntax errors only, since the
+# shell's qs.* imports cannot be resolved outside a running Omarchy shell.
+qmllint_bin=$(command -v qmllint qmllint6 /usr/lib/qt6/bin/qmllint 2>/dev/null | head -n 1)
+
+for file in manifest.json README.md CHANGELOG.md LICENSE; do
+  [[ -f $dir/$file ]] || fail "missing $file"
+done
+
+while IFS= read -r -d '' json; do
+  jq empty "$json" 2>/dev/null || fail "invalid JSON in ${json#"$dir"/}"
+done < <(find "$dir" -name '*.json' -not -path '*/.git/*' -not -path '*/node_modules/*' -print0)
+
+id=$(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null)
+[[ $id =~ ^io\.github\.ltecosta\.[a-z0-9-]+$ ]] || fail "manifest id '$id' is not io.github.ltecosta.<name>"
+echo "== $id"
+
+if command -v omarchy-plugin-validate >/dev/null; then
+  omarchy-plugin-validate "$dir" >/dev/null || fail "omarchy plugin validate"
+else
+  echo "   omarchy-plugin-validate not installed; manifest schema not checked"
+fi
+
+if compgen -G "$dir/tests/*.test.js" >/dev/null; then
+  (cd "$dir" && node --test) || fail "node tests"
+fi
+if compgen -G "$dir/tests/test_*.py" >/dev/null; then
+  (cd "$dir" && python3 -B -m unittest discover -s tests) || fail "python tests"
+fi
+if compgen -G "$dir/tests/*_test.lua" >/dev/null; then
+  if (( ${#lua_bins[@]} == 0 )); then
+    fail "Lua tests present but no Lua 5.4 or later interpreter found"
+  else
+    for lua_bin in "${lua_bins[@]}"; do
+      for test in "$dir"/tests/*_test.lua; do
+        (cd "$dir" && "$lua_bin" "tests/${test##*/}") || fail "${test##*/} ($lua_bin)"
+      done
+    done
+  fi
+fi
+
+# Smoke tests drive the plugin's QML in a headless Quickshell; each one skips
+# itself (exit 0 with a notice) where Quickshell is not installed.
+for smoke in "$dir"/tests/*.smoke.sh; do
+  [[ -e $smoke ]] || continue
+  bash "$smoke" || fail "${smoke##*/}"
+done
+
+if find "$dir" -name '*.qml' -not -path '*/tests/*' -not -path '*/.git/*' -print -quit | grep -q .; then
+  if [[ -z $qmllint_bin ]]; then
+    fail "QML files present but qmllint not installed"
+  else
+    while IFS= read -r -d '' qml; do
+      "$qmllint_bin" "$qml" >/dev/null 2>&1 || fail "qmllint ${qml#"$dir"/}"
+    done < <(find "$dir" -name '*.qml' -not -path '*/tests/*' -not -path '*/.git/*' -print0)
+  fi
+fi
+
+exit "$failed"

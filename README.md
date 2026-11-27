@@ -10,11 +10,13 @@ Everything else is Omarchy's widget as it was when copied.
 ## Install
 
 ```bash
-scripts/install workspaces
+omarchy plugin add https://github.com/LTeCosta/omarchy-workspaces.git
 omarchy plugin enable io.github.ltecosta.workspaces
 ```
 
 Put it where `omarchy.workspaces` was and take that one off the bar. The manifest declares itself a clone of `omarchy.workspaces`, which gives it the same access to Omarchy's services.
+
+Update it with `omarchy plugin update io.github.ltecosta.workspaces`.
 
 ## Keeping up with Omarchy
 
